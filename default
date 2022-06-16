@@ -1,0 +1,293 @@
+upstream acachesuki {
+	server unix:/tmp/acachesuki.sock fail_timeout=0;
+}
+
+upstream comatose {
+    server unix:/tmp/comatose.sock fail_timeout=0;
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name osu.ppy.sh;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	location /difficulty-rating {
+		return 307 $scheme://osu.ppy.sh$request_uri;
+	}
+
+	location /web/osu-osz2-getscores.php {
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header Host $http_host;
+		proxy_pass http://acachesuki;
+	}
+
+	location /web/osu-submit-modular-selector.php {
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header Host $http_host;
+		proxy_pass http://acachesuki;
+	}
+
+	location /web/osu-getreplay.php {
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header Host $http_host;
+		proxy_pass http://acachesuki;
+	}
+
+	# osu.ppy.sh/web goes to lets
+	location /web/ {
+		client_max_body_size 100M;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header Host $http_host;
+		proxy_redirect off;
+		proxy_intercept_errors on;
+		error_page 501 502 503 504 =408 @down;
+		proxy_pass http://localhost:5002;
+	}
+
+	# osu.ppy.sh/api goes to rippleapi
+	location /api/ {
+		add_header 'Access-Control-Allow-Origin' '*';
+		add_header 'Access-Control-Allow-Methods' 'POST, GET, OPTIONS';
+		add_header 'Access-Control-Allow-Headers' 'X-Ripple-Token';
+		add_header 'Access-Control-Max-Age' '21600';
+
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_pass http://localhost:40001;
+	}
+
+	# osu.ppy.sh/notifications goes to hell
+	location ~^/notifications {
+		return 408 "no";
+	}
+
+	# rest goes to hanayo
+	location / {
+		return 301 $scheme://akatsuki.pw$request_uri;
+	}
+
+	location @down {
+		return 408 "error: no";
+	}
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name c.ppy.sh ce.ppy.sh c4.ppy.sh c5.ppy.sh c6.ppy.sh ct.akatsuki.pw c.akatsuki.pw;
+	#server_name ~^c(?:[4-6]|e)?\.(?:ppy\.sh|cmyui\.codes)$;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	location / {
+		proxy_set_header X-Real-IP  $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header Host $host;
+		proxy_redirect off;
+		proxy_pass http://127.0.0.1:5001;
+	}
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name b.akatsuki.pw;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	location / {
+		return 302 $scheme://b.ppy.sh$request_uri;
+	}
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name i.akatsuki.pw;
+	#server_name ~^i\.(?:cmyui\.codes|ppy\.sh)$;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	root /http/avatars;
+	#rewrite ^.+$ /logo_ingame.png last;
+	error_page 404 403 =200 /default.png;
+
+	location / {
+		rewrite ^/(\d+)$ /$1.png;
+		#root /home/akatsuki/go/src/zxq.co/ripple/hanayo/static/logos/;
+		#alias /home/akatsuki/go/src/zxq.co/ripple/hanayo/static/logos/;
+	}
+
+	#root /home/akatsuki/go/src/zxq.co/ripple/hanayo/static/logos/logo.png;
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name a.ppy.sh a.akatsuki.pw;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+
+	location ~ ^/(?<id>\d+|d)(?:\.png)?/?$ {
+		default_type image/png;
+		alias /home/akatsuki/avatars/;
+		try_files $id.png /d.png;
+	}
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name old.akatsuki.pw old.relax.akatsuki.pw old.osu.akatsuki.pw;
+	#server_name ~^old(?:\.(?:relax|osu))?\.cmyui\.codes$;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	root /home/akatsuki/old-frontend/;
+
+	location ~ \.php$ {
+		try_files $uri =404;
+		fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
+		fastcgi_index index.php;
+		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+		include fastcgi.conf;
+		add_header Access-Control-Allow-Origin *;
+	}
+
+	location /ips.txt {
+		return 200 "144.217.254.156";
+	}
+
+	location /.git/ {
+		return 200 "yes";
+	}
+
+	location / {
+		#autoindex on;
+		add_header Access-Control-Allow-Origin *;
+		index index.php;
+		rewrite ^/(?:u|d)/\d+$ /rewrite.php;
+	}
+}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	server_name www.akatsuki.pw akatsuki.pw;
+	#server_name ~^(?:www\.)?cmyui\.codes$;
+
+	ssl_certificate     /home/akatsuki/certs/server.crt;
+	ssl_certificate_key /home/akatsuki/certs/server.key;
+
+	location ~ ^/future(/?)(.*) { # regex magic!
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header Host $http_host;
+		proxy_redirect off;
+		proxy_intercept_errors on;
+		error_page 501 502 503 504 =408 @down;
+
+		proxy_pass http://comatose/$2;
+    }
+
+	location ~ ^/(?:web/replays|d)/\d+$ {
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header Host $http_host;
+		proxy_redirect off;
+		proxy_intercept_errors on;
+		error_page 501 502 503 504 =408 @down;
+
+		proxy_pass http://127.0.0.1:5002;
+	}
+
+	location ~ ^/rx/u/(?<id>\d+)$ {
+		return 302 $scheme://akatsuki.pw/u/$id?rx=1;
+	}
+
+	location /difficulty-rating {
+		return 307 $scheme://osu.ppy.sh$request_uri;
+	}
+
+	location /ss/ {
+		alias /home/akatsuki/screenshots/;
+		try_files $uri /d.png;
+	}
+
+        #location /d/ {
+        #        return 302 https://api.chimu.moe/v1$request_uri;#osu.gatari.pw$request_uri;#https://storage.ripple.moe$request_uri;
+        #}
+
+#	location ~ ^/(?:s|d)/$ {
+#		proxy_set_header X-Real-IP $remote_addr;
+#		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#		proxy_set_header X-Forwarded-Proto https;
+#		proxy_set_header Host pisstau.be;
+#		proxy_redirect off;
+#		proxy_pass http://1.1.1.1;
+#	}
+
+
+	location /api/ {
+		add_header 'Access-Control-Allow-Origin' '*';
+		add_header 'Access-Control-Allow-Methods' 'POST, GET, OPTIONS';
+		add_header 'Access-Control-Allow-Headers' 'X-Ripple-Token';
+		add_header 'Access-Control-Max-Age' '21600';
+
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_pass http://localhost:40001;
+	}
+
+	location /static/ {
+		alias /home/akatsuki/go/src/zxq.co/ripple/hanayo/static/;
+	}
+
+	location /discord {
+		return 302 $scheme://discord.gg/5cBtMPW;
+	}
+
+	location /home/account/edit {
+		return 302 $scheme://akatsuki.pw/settings/avatar;
+	}
+
+	location /home/notifications {
+		break;
+	}
+
+	#location /home/ {
+	#	proxy_set_header Host $host;
+	#	proxy_set_header X-Real-IP $remote_addr;
+	#	proxy_pass http://localhost:40002;
+	#}
+
+	#location ~* ^/s/(\d+) {
+	#	return 302 $scheme://pisstau.be/d/$1;
+	#}
+
+#https://osu.ppy.sh/beatmapsets/1117775#osu/2334952
+	rewrite ^/beatmapsets/\d+#osu/(\d+)/?$ /b/$1 last;
+
+	location / {
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_pass http://localhost:46221;
+	}
+
+	location @down {
+		return 408 "error: no";
+	}
+}

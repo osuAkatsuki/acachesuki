@@ -1,0 +1,3 @@
+[submodule "oppai-ng"]
+	path = oppai-ng
+	url = git@github.com:osuAkatsuki/akatsuki-pp.git
