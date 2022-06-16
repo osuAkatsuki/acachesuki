@@ -7,3 +7,4 @@ uvloop == 0.16.0
 cmyui == 1.9.3
 py3rijndael == 0.3.3
 peace-performance-python == 1.1.2
+rosu-pp-py == 0.5.1

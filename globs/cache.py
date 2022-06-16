@@ -16,11 +16,6 @@ from .conn import conns
 # -- Basic caches --
 beatmap = LRUCache(cache_length=120, cache_limit=1000)
 
-# Stores tuples (mode, md5, lb_type)
-leaderboard = LRUCache(cache_length=120, cache_limit=100_000)
-
-personal_best = LRUCache(cache_length=240, cache_limit=100_000)
-
 # -- Specialised Caches --
 clan = ClanCache()
 password = BCryptCache()
@@ -72,6 +67,8 @@ async def init_caches():
                     "vnfl": cap[3],
                     "rx": cap[2],
                     "rxfl": cap[4],
+                    "ap": cap[5],
+                    "apfl": cap[6],
                 }
 
             info(f"Loaded pp limits cache!")

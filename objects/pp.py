@@ -1,4 +1,5 @@
-from peace_performance_python.objects import Beatmap, Calculator
+from rosu_pp_py import Calculator as RCalculator, ScoreParams
+from peace_performance_python import Calculator, Beatmap
 from cmyui.osu.oppai_ng import OppaiWrapper
 from aiohttp import ClientSession
 from pathlib import Path
@@ -6,7 +7,26 @@ from pathlib import Path
 import math
 
 
-class PeaceCalculator:  # wrapper around peace performance for ease of use
+class RosuCalculator:  # wrapper around peace performance for ease of use
+    def __init__(self, score) -> None:
+        self.score = score
+        self.map = score.map
+
+    def calculate(self, map_path: str) -> tuple[float]:
+        calculator = RCalculator(map_path)
+        params = ScoreParams(
+            acc=self.score.acc,
+            nMisses=self.score.miss,
+            score=self.score.score,
+            combo=self.score.combo,
+            mods=self.score.mods,
+        )
+
+        (result,) = calculator.calculate(params)
+        return (result.pp, result.stars)
+
+
+class PeaceCalculator:
     def __init__(self, score) -> None:
         self.score = score
         self.map = score.map
@@ -16,7 +36,6 @@ class PeaceCalculator:  # wrapper around peace performance for ease of use
         calculator = Calculator(
             acc=self.score.acc,
             miss=self.score.miss,
-            katu=self.score.katu,
             score=self.score.score,
             combo=self.score.combo,
             mode=self.score.mode.as_mode_int(),
@@ -67,6 +86,12 @@ class PPUtils:
 
         return self
 
+    @staticmethod
+    def calc_rosu(score) -> "PPUtils":
+        self = PPUtils(score=score, calc=RosuCalculator)
+
+        return self
+
     async def calculate(self) -> tuple[float]:
         map_path = Path(f"/home/akatsuki/lets/.data/beatmaps/{self.map.id}.osu")  # lol
         if not map_path.exists():
@@ -76,10 +101,11 @@ class PPUtils:
                     map_path.write_bytes(map_file)
 
         try:
-            pp, sr = self.calc(self.score).calculate(map_path)
+            pp, sr = self.calc(self.score).calculate(str(map_path))
         except:
             pp, sr = 0, 0  # shouldn't really occur
 
         if math.isnan(pp) or math.isinf(pp):
             return (0.0, 0.0)
+
         return (pp, sr)

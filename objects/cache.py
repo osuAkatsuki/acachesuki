@@ -409,7 +409,7 @@ class PrivilegeCache:
     """A cache for storing the privileges of users for quick lookups."""
 
     def __init__(self) -> None:
-        self._cache: dict[int, str] = {}
+        self._cache: dict[int, int] = {}
 
     async def preload_all(self, cur: aiomysql.Cursor) -> None:
         """Loads all privileges for users."""
@@ -424,7 +424,7 @@ class PrivilegeCache:
         for u, priv in privs_db:
             self._cache[u] = priv
 
-    def get(self, user_id: int) -> Optional[str]:
+    def get(self, user_id: int) -> Optional[int]:
         """Returns the privileges for the given user.
 
         Args:
@@ -433,7 +433,7 @@ class PrivilegeCache:
 
         return self._cache.get(user_id)
 
-    async def cache_individual(self, user_id: int, cur: aiomysql.Cursor) -> None:
+    async def cache_individual(self, user_id: int, cur: aiomysql.Cursor) -> int:
         """Caches an individual's privilege to cache. Meant for
         handling privilege updates.
 
@@ -456,7 +456,7 @@ class PrivilegeCache:
         priv_db = await cur.fetchone()
 
         if not priv_db:
-            return  # should NOT happen ??????
+            raise type("WTFError", (Exception,), {"message": "No user found!"})
 
         # cache their priv.
         self._cache[user_id] = priv_db[0]
@@ -498,7 +498,7 @@ class CountryCache:
 
         return self._cache.get(user_id)
 
-    async def cache_individual(self, user_id: int, cur: aiomysql.Cursor) -> None:
+    async def cache_individual(self, user_id: int, cur: aiomysql.Cursor) -> str:
         """Caches an individual's country to cache. Meant for
         handling privilege updates.
 
@@ -521,7 +521,7 @@ class CountryCache:
         country_db = await cur.fetchone()
 
         if not country_db:
-            return  # should NOT happen ??????
+            raise type("WTFError", (Exception,), {"message": "No user found!"})
 
         # cache their country.
         self._cache[user_id] = country_db[0]
@@ -537,9 +537,9 @@ class FriendsCache:
     """A cache for storing the friends list of users for quick lookups."""
 
     def __init__(self) -> None:
-        self._cache: dict[int, str] = {}
+        self._cache: dict[int, list[int]] = {}
 
-    def get(self, user_id: int) -> Optional[str]:
+    def get(self, user_id: int) -> Optional[list[int]]:
         """Returns the friends list for the given user.
 
         Args:
@@ -584,7 +584,7 @@ class WhitelistCache:
     """A cache for storing the whitelist status of users for quick lookups."""
 
     def __init__(self) -> None:
-        self._cache: dict[int, str] = {}
+        self._cache: dict[int, int] = {}
 
     async def preload_all(self, cur: aiomysql.Cursor) -> None:
         """Loads all whitelist status' for users."""
@@ -608,12 +608,12 @@ class WhitelistCache:
 
         val = self._cache.get(user_id)
         if not val:
-            return
+            return False
 
         if not relax:
-            return val & 1
+            return val & 1 == 1
         else:
-            return val & 2
+            return val & 2 == 2
 
     async def cache_individual(self, user_id: int, cur: aiomysql.Cursor) -> None:
         """Caches an individual's whitelist status to cache. Meant for
@@ -651,7 +651,7 @@ class StatsCache:
     """A cache for storing the stats of users for quick lookups."""
 
     def __init__(self) -> None:
-        self._cache: dict[int, str] = {}
+        self._cache: dict[tuple[int, Mode], "Stats"] = {}
 
     async def get(self, user_id: int, mode: Mode, cur: aiomysql.Cursor) -> "Stats":
         """Returns the stats for the given user.
@@ -671,12 +671,14 @@ class StatsCache:
             return val
 
         await self.cache_individual(user_id, mode, cur)
-        return self._cache.get(
+        val = self._cache.get(
             (
                 user_id,
                 mode,
             )
         )
+        assert val is not None
+        return val
 
     async def cache_individual(
         self, user_id: int, mode: Mode, cur: aiomysql.Cursor
@@ -690,7 +692,7 @@ class StatsCache:
 
         # Delete them if they already had a value cached.
         try:
-            del self._cache[user_id]
+            del self._cache[(user_id, mode)]
         except KeyError:
             pass
 

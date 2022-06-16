@@ -8,10 +8,10 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 from logger import debug, error, info, DEBUG
 from pubsubs import (
-    handle_restricted_user,
+    # handle_restricted_user,
     pubsub_executor,
     handle_status_update,
-    name_change,
+    # name_change,
 )
 from handlers import handle_submission, handle_replays, handle_leaderboards
 
@@ -28,8 +28,8 @@ __version__ = "0.0.2"
 # TODO: name updates, score wipes
 REDIS_PUBSUB = (
     ("cache:map_update", handle_status_update),
-    ("peppy:ban", handle_restricted_user),
-    ("peppy:change_username", name_change),
+    # ("peppy:ban", handle_restricted_user),
+    # ("peppy:change_username", name_change),
 )
 
 

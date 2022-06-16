@@ -1,6 +1,5 @@
 import traceback
-from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import aiomysql
 import aioredis
@@ -12,8 +11,8 @@ from logger import error, info
 # Big botch.
 @dataclass
 class Connections:
-    sql: aiomysql.Pool = None
-    redis: aioredis.ConnectionsPool = None
+    sql: aiomysql.Pool = field(init=False)
+    redis: aioredis.Redis = field(init=False)
 
     async def establish(self) -> None:
         """Establishes all the required connections."""
@@ -22,7 +21,7 @@ class Connections:
         self.redis = await create_redis_pool()
 
 
-async def create_redis_pool() -> None:
+async def create_redis_pool() -> aioredis.Redis:
     """Creates a connection to the redis server."""
 
     info("Attempting to connect to redis @ redis://localhost")
@@ -36,7 +35,7 @@ async def create_redis_pool() -> None:
         raise SystemExit(1)
 
 
-async def create_sql_pool():
+async def create_sql_pool() -> aiomysql.Pool:
     """Creates the connection to MySQL."""
 
     info(f"Attempting to connect to MySQL ({conf.sql_host}:3306 @ {conf.sql_db})")

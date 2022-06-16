@@ -1,7 +1,7 @@
+from typing import Optional, TYPE_CHECKING
 from py3rijndael import RijndaelCbc, ZeroPadding
 from aiohttp import ClientSession
 from urllib.parse import urlencode
-from dataclasses import dataclass
 
 from .beatmap import LWBeatmap, try_bmap
 from config import conf
@@ -13,6 +13,9 @@ from const import Mode
 import aiomysql
 import base64
 import time
+
+if TYPE_CHECKING:
+    from starlette.datastructures import FormData
 
 PB_PLACEMENT = """
 SELECT COUNT(*) + 1
@@ -35,7 +38,6 @@ class Score:
         self.user_name = None
         self.score = None
         self.combo = None
-        self.full_combo = None
         self.mods = None
         self.n300 = None
         self.n100 = None
@@ -56,13 +58,16 @@ class Score:
         self.quit = None
         self.grade = None
         self.using_patcher = None
+        self.rank = None
 
     @staticmethod
-    async def from_score_submission(args: list, cur: aiomysql.Cursor) -> "Score":
+    async def from_score_submission(
+        args: "FormData", cur: aiomysql.Cursor
+    ) -> Optional["Score"]:
         """Creates a score object from an osu! submission request"""
 
         aes = RijndaelCbc(
-            key="osu!-scoreburgr---------" + args["osuver"],
+            key=("osu!-scoreburgr---------" + args["osuver"]).encode(),
             iv=base64.b64decode(args["iv"]),
             padding=ZeroPadding(32),
             block_size=32,
@@ -83,6 +88,7 @@ class Score:
             info(
                 f"Received incorrect username + password combo from {score.user_name}."
             )
+            # TODO: should this really return the score? or should it be None?
             return score
 
         score.map = (await try_bmap(data[0], cur))[1]
@@ -90,12 +96,14 @@ class Score:
             return score
 
         if len(data) != 18:
-            return info(f"Received invalid score submission from {score.user_name}.")
+            info(f"Received invalid score submission from {score.user_name}.")
+            return None
 
         score.checksum = data[2]
 
         if not all(map(str.isdecimal, data[3:11] + [data[13], data[15], data[16]])):
-            return info(f"Received an invalid score submission from {score.user_name}")
+            info(f"Received an invalid score submission from {score.user_name}")
+            return None
 
         (
             score.n300,
@@ -115,8 +123,7 @@ class Score:
 
         score.mods = int(data[13])
         mode = int(data[15])
-        rx = score.mods & 128 > 0 and mode != 3
-        score.mode = Mode.from_mode_int(mode, rx)
+        score.mode = Mode.from_mode_int(mode, score.mods)
 
         score.time = int(time.time())
 
@@ -129,7 +136,7 @@ class Score:
     @staticmethod
     async def from_sql(
         sql_row: tuple, rx: bool, cur: aiomysql.Cursor, prev_s: bool = False
-    ) -> "Score":
+    ) -> Optional["Score"]:
         """Creates a score object from a database row"""
 
         score = Score()
@@ -137,7 +144,7 @@ class Score:
         score.id = sql_row[0]
         score.map = (await try_bmap(sql_row[1], cur))[1]
         if not score.map and not prev_s:
-            return
+            return None
 
         score.user_id = sql_row[2]
         score.score = sql_row[3]
@@ -151,16 +158,36 @@ class Score:
         score.geki = sql_row[11]
         score.miss = sql_row[12]
         score.time = sql_row[13]
-        score.mode = Mode.from_mode_int(sql_row[14], rx)
+        score.mode = Mode.from_mode_int(sql_row[14], score.mods)
         score.status = sql_row[15]
         score.acc = sql_row[16]
         score.pp = sql_row[17]
         score.passed = score.status > 0
 
-        if cache.priv.get(score.user_id) & 1 and score.map.has_leaderboard:
-            score.rank = await score.calc_rank(cur, sql=True)
-        else:
-            score.rank = 0
+        return score
+
+    @staticmethod
+    def from_lb_row(sql_row: tuple, beatmap: LWBeatmap, mode: Mode) -> "Score":
+        score = Score()
+
+        score.id = sql_row[0]
+        score.combo = sql_row[2]
+        score.n50 = sql_row[3]
+        score.n100 = sql_row[4]
+        score.n300 = sql_row[5]
+        score.miss = sql_row[6]
+        score.katu = sql_row[7]
+        score.geki = sql_row[8]
+        score.fc = sql_row[9]
+        score.mods = sql_row[10]
+        score.time = sql_row[11]
+        score.user_id = sql_row[13]
+        score.pp = sql_row[14]
+        score.score = sql_row[16]
+        score.acc = sql_row[17]
+
+        score.mode = mode
+        score.map = beatmap
 
         return score
 
@@ -213,11 +240,11 @@ class Score:
                 )
 
     async def calc_pp(self) -> None:
-        if (
-            self.mode.as_mode_int() != 0 or not self.mode.relax
-        ):  # non-std (vn/rx) and std vn
+        if self.mode.value == 0:  # std-vn
+            calc = PPUtils.calc_rosu(self)
+        elif self.mode.as_mode_int() != 0:  # pass ctb, mania and taiko thru peace
             calc = PPUtils.calc_peace(self)
-        else:
+        else:  # std rx & ap:
             calc = PPUtils.calc_oppai(self)
 
         self.pp, self.sr = await calc.calculate()
@@ -231,7 +258,7 @@ class Score:
             self.status = 1
             return
 
-        table = "scores" if not self.mode.relax else "scores_relax"
+        table = self.mode.scores_table
         query = (
             f"userid = %s AND completed = 3 AND beatmap_md5 = %s "
             f"AND play_mode = {self.mode.as_mode_int()}"
@@ -257,59 +284,43 @@ class Score:
 
         self.status = 2
 
-    async def calc_rank(self, cur: aiomysql.Cursor, sql: bool = False) -> None:
-        table = "scores" if not self.mode.relax else "scores_relax"
-        scoring = "pp" if self.mode.relax else "score"
-        pb_query = PB_PLACEMENT.format(table=table, scoring=scoring)
-
+    async def first_place(self, cur: aiomysql.Cursor) -> None:
         await cur.execute(
-            pb_query,
-            (getattr(self, scoring), self.map.md5, self.mode.as_mode_int()),
+            "DELETE FROM scores_first WHERE beatmap_md5 = %s AND mode = %s AND rx = %s",
+            (
+                self.map.md5,
+                self.mode.as_mode_int(),
+                1 if self.mode.relax else (2 if self.mode.autopilot else 0),
+            ),
         )
 
-        self.rank = (await cur.fetchone())[0]
+        await cur.execute(
+            "INSERT INTO scores_first (beatmap_md5, mode, rx, scoreid, userid) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (
+                self.map.md5,
+                self.mode.as_mode_int(),
+                1 if self.mode.relax else (2 if self.mode.autopilot else 0),
+                self.id,
+                self.user_id,
+            ),
+        )
 
-        if self.rank == 1 and not sql:  # insert into first places
-            await cur.execute(
-                "DELETE FROM scores_first WHERE beatmap_md5 = %s AND mode = %s AND rx = %s",
-                (
-                    self.map.md5,
-                    self.mode.as_mode_int(),
-                    self.mode.relax,
-                ),
+        # announce #1 ingame
+        # TODO: check if score is highest pp play for that mode, and change announce msg if so
+        profile_embed = f"[https://akatsuki.pw/u/{self.user_id} {self.user_name_real}]"
+        ann_msg = f"[{'R' if self.mode.relax else ('V' if not self.mode.autopilot else 'A')}] {profile_embed} achieved rank #1 on {self.map.embed} ({self.mode.annouce_prefix}) - {self.pp:.2f}pp"
+
+        # send request to pep.py
+        params = urlencode({"k": conf.fokabot_key, "to": "#announce", "msg": ann_msg})
+
+        async with ClientSession() as sesh:
+            await sesh.get(
+                f"http://localhost:5001/api/v1/fokabotMessage?{params}", timeout=2
             )
-
-            await cur.execute(
-                "INSERT INTO scores_first (beatmap_md5, mode, rx, scoreid, userid) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (
-                    self.map.md5,
-                    self.mode.as_mode_int(),
-                    self.mode.relax,
-                    self.id,
-                    self.user_id,
-                ),
-            )
-
-            # announce #1 ingame
-            # TODO: check if score is highest pp play for that mode, and change announce msg if so
-            profile_embed = (
-                f"[https://akatsuki.pw/u/{self.user_id} {self.user_name_real}]"
-            )
-            ann_msg = f"[{'R' if self.mode.relax else 'V'}] {profile_embed} achieved rank #1 on {self.map.embed} ({self.mode.annouce_prefix}) - {self.pp:.2f}pp"
-
-            # send request to pep.py
-            params = urlencode(
-                {"k": conf.fokabot_key, "to": "#announce", "msg": ann_msg}
-            )
-
-            async with ClientSession() as sesh:
-                await sesh.get(
-                    f"http://localhost:5001/api/v1/fokabotMessage?{params}", timeout=2
-                )
 
     async def submit(self, cur: aiomysql.Cursor) -> None:
-        table = "scores" if not self.mode.relax else "scores_relax"
+        table = self.mode.scores_table
 
         await cur.execute(
             f"INSERT INTO {table} (beatmap_md5, userid, score, max_combo, full_combo, "

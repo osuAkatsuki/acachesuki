@@ -1,16 +1,19 @@
-import time
+import random
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from json.decoder import JSONDecodeError
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 
 import aiohttp
 import aiomysql  # For type checking
 
-from const import FetchResult, Status
+from const import FetchResult, Status, Mode
 from globs import cache
 from logger import debug, error
+from config import conf
+
+if TYPE_CHECKING:
+    from objects.leaderboards import Leaderboard
 
 try:
     import orjson as json_lib
@@ -35,16 +38,14 @@ def create_song_name(artist: str, title: str, diff: str) -> str:
     return f"{artist} - {title} [{diff}]"
 
 
-async def get_bmap_fumos(md5: str) -> Union[dict, str]:
+async def get_bmap(md5: str) -> Union[dict, str]:
     """Creates a request to Akatsuki's oapi bmap mirror (http://akat.fumos.live/get_map)
     and returns the json response."""
 
     async with aiohttp.ClientSession(json_serialize=json_dump) as s:
-        async with s.get(f"http://akat.fumos.live/get_map?b={md5}") as r:
-            try:
-                return await r.json(content_type=None)
-            except JSONDecodeError:
-                return await r.text()  # for non-existant beatmaps
+        key = random.choice(conf.osu_api_keys)
+        async with s.get(f"https://old.ppy.sh/api/get_beatmaps?h={md5}&k={key}") as r:
+            return (await r.json(content_type=None))[0]  # NOTE: may raise exc
 
 
 @dataclass
@@ -57,11 +58,13 @@ class LWBeatmap:
     status: Status
     song_name: str
     rating: float
-    last_update_ts: datetime
+    last_updated: datetime
     frozen: bool
 
     playcount: int
     passcount: int
+
+    leaderboard: dict[Mode, "Leaderboard"] = field(default_factory=dict)
 
     @property
     def deserves_update(self) -> bool:
@@ -69,23 +72,16 @@ class LWBeatmap:
         details for the map."""
 
         # See if we can skip calculating scaling etc
-        if self.frozen or self.status not in UPDATE_SKIP_STATUSES:
-            return True
+        if self.frozen:
+            return False
 
         # Linear time scaling from gulag.
         now = datetime.now()
-
-        try:
-            update_delta = now - self.last_update_ts
-        except TypeError:  # not sure why this is caused atm
-            debug(f"now type: {type(now)}")
-            debug(f"update type: {type(self.last_update_ts)}")
-
-            return False
+        update_delta = now - self.last_updated
 
         check_delta = timedelta(hours=2 + ((5 / 365) * update_delta.days))
 
-        return now > (self.last_update_ts + check_delta)
+        return now > (self.last_updated + check_delta)
 
     @property
     def has_leaderboard(self) -> bool:
@@ -97,19 +93,11 @@ class LWBeatmap:
 
     @property
     def formatted_time(self) -> str:
-        try:
-            return self.last_update_ts.strftime("%Y-%m-%d %H:%M:%S")
-        except AttributeError:  # convert to datetime
-            self.last_update_ts = datetime.fromtimestamp(self.last_update_ts)
-            return self.last_update_ts.strftime("%Y-%m-%d %H:%M:%S")
+        return self.last_updated.strftime("%Y-%m-%d %H:%M:%S")
 
     @property
-    def ts(self) -> int:
-        try:
-            return self.last_update_ts.timestamp()
-        except AttributeError:
-            self.last_update_ts = datetime.fromtimestamp(self.last_update_ts)
-            return self.last_update_ts.timestamp()
+    def ts(self) -> float:
+        return self.last_updated.timestamp()
 
     @property
     def url(self) -> str:
@@ -169,7 +157,7 @@ class LWBeatmap:
         bmap_db = await cur.fetchone()
 
         if not bmap_db:
-            return FetchResult.NONE
+            return None
 
         return LWBeatmap(
             id=bmap_db[0],
@@ -178,7 +166,7 @@ class LWBeatmap:
             status=Status(bmap_db[3]),
             song_name=bmap_db[4],
             rating=bmap_db[5],
-            last_update_ts=datetime.fromtimestamp(bmap_db[6]),
+            last_updated=datetime.fromtimestamp(bmap_db[6]),
             frozen=bmap_db[7],
             playcount=bmap_db[8],
             passcount=bmap_db[9],
@@ -196,7 +184,7 @@ class LWBeatmap:
             status=Status.from_api(int(resp["approved"])),
             song_name=create_song_name(resp["artist"], resp["title"], resp["version"]),
             rating=10,
-            last_update_ts=datetime.strptime(resp["last_update"], "%Y-%m-%d %H:%M:%S"),
+            last_updated=datetime.strptime(resp["last_update"], "%Y-%m-%d %H:%M:%S"),
             frozen=False,
             playcount=0,
             passcount=0,
@@ -208,17 +196,20 @@ class LWBeatmap:
         beatmap mirror. Returns `None` if not found."""
 
         try:
-            resp = await get_bmap_fumos(md5)
+            resp = await get_bmap(md5)
+        except IndexError:
+            # 0 maps returned
+            return None
         except Exception:
             error(
                 f"Error sending request to Akat osu!api mirror with md5 {md5}\n"
                 + traceback.format_exc()
             )
-            return FetchResult.NONE
+            return None
 
-        if isinstance(resp, str):
+        if not resp or isinstance(resp, str):
             debug(f"Beatmap {md5} does not exist on the osu!api!")
-            return FetchResult.NONE
+            return None
 
         return LWBeatmap.from_oapiv1_dict(resp)
 
@@ -230,7 +221,7 @@ class LWBeatmap:
 
         await cur.execute(
             "UPDATE beatmaps SET playcount = %s, passcount = %s "
-            "WHERE beatmap_id = %s",
+            "WHERE beatmap_md5 = %s",
             (self.playcount, self.passcount, self.md5),
         )
 
@@ -240,13 +231,22 @@ class LWBeatmap:
     def blank_with_status(st: Status) -> "LWBeatmap":
         """Creates a blank object with a status."""
 
-        return LWBeatmap(0, 0, "", st, "", 0.0, datetime.now(), False, 0, 0)
+        return LWBeatmap(
+            id=0,
+            set_id=0,
+            md5="",
+            status=st,
+            song_name="",
+            rating=0.0,
+            last_updated=datetime.now(),
+            frozen=False,
+            playcount=0,
+            passcount=0,
+        )
 
     def __repr__(self) -> str:
         return f"{self.song_name} ({self.md5})"
 
-
-NOCHECK_STATUSES = (Status.UPDATE_AVAILABLE, Status.NOT_SUBMITTED)
 
 UPDATE_BMAP = LWBeatmap.blank_with_status(Status.UPDATE_AVAILABLE)
 NOT_SUB_BMAP = LWBeatmap.blank_with_status(Status.NOT_SUBMITTED)
@@ -269,14 +269,14 @@ async def try_bmap(
     bmap = LWBeatmap.from_cache(md5)
     res = 1
 
-    if not bmap:
+    if bmap is None:
         res += 1
         bmap = await LWBeatmap.from_db(md5, cur)
-        if not bmap:
+        if bmap is None:
             res += 1
             bmap = await LWBeatmap.from_akat_mirror(md5)
 
-        if bmap:
+        if bmap is not None:
             await bmap.save(cur)
             bmap.cache()
 
@@ -297,7 +297,7 @@ async def try_bmap(
 
         current_data = await LWBeatmap.from_akat_mirror(md5)
         if current_data:
-            bmap.last_update_ts = time.time()
+            bmap.last_updated = datetime.now()
 
             if current_data.md5 != bmap.md5:
                 debug(f"Updating {bmap!r}")

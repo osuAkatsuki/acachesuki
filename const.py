@@ -80,10 +80,15 @@ class Mode(IntEnum):
     RX_TAIKO = 5
     RX_CATCH = 6
 
+    # AUTOPILOT
+    AP_STANDARD = 7
+
     def as_mode_int(self) -> int:
         """Converts the mode enum to a mode int for storage in the db."""
 
         val = self.value
+        if val == 7:
+            return 0
         if val > 3:
             val -= 4
         return val
@@ -92,7 +97,11 @@ class Mode(IntEnum):
     def relax(self) -> bool:
         """Property stating whether the mode is a relax mode."""
 
-        return self.value > 3
+        return self.value > 3 and self.value != 7
+
+    @property
+    def autopilot(self) -> bool:
+        return self.value == 7
 
     @property
     def db_prefix(self) -> str:
@@ -121,14 +130,50 @@ class Mode(IntEnum):
             return "Catch"
         elif mode_int == 3:
             return "Mania"
+        else:
+            raise NotImplementedError(f"Unknown mode int: {mode_int}")
 
     @staticmethod
-    def from_mode_int(mode: int, rx: bool = True) -> "Mode":
-        """Converts a mode int and presence of rx into a `Mode` enum."""
+    def from_mode_int(mode: int, mods: int) -> "Mode":
+        """Converts a mode int and presence of rx/ap into a `Mode` enum."""
 
-        if rx:
+        if mode == 3:
+            return Mode.VN_MANIA
+        if mods & 128:
             mode += 4
+        if mods & 8192:
+            return Mode.AP_STANDARD
         return Mode(mode)
+
+    @property
+    def stats_table(self) -> str:
+        if self.autopilot:
+            return "ap_stats"
+
+        if self.relax:
+            return "rx_stats"
+
+        return "users_stats"
+
+    @property
+    def scores_table(self) -> str:
+        if self.autopilot:
+            return "scores_ap"
+
+        if self.relax:
+            return "scores_relax"
+
+        return "scores"
+
+    @property
+    def leaderboard_str(self) -> str:
+        if self.autopilot:
+            return "autoboard"
+
+        if self.relax:
+            return "relaxboard"
+
+        return "leaderboard"
 
 
 FETCH_COL = (

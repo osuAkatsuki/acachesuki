@@ -3,13 +3,15 @@ from typing import Union
 from logger import debug, info
 
 try:
-    from orjson import dumps as j_dumps
+    from orjson import (
+        dumps as j_dumps,
+        loads as j_loads,
+    )
 except ImportError:
-    from json import dumps as j_dumps
-try:
-    from orjson import loads as j_loads
-except ImportError:
-    from json import loads as j_loads
+    from json import (
+        dumps as j_dumps,
+        loads as j_loads,
+    )
 
 import os
 
@@ -157,6 +159,7 @@ class Config(ConfigReader):
     sql_password: str = ""
 
     fokabot_key: str = ""
+    osu_api_keys: list[str] = []
 
 
 conf = Config()
