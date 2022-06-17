@@ -132,18 +132,6 @@ class Score:
 
         await score.calc_status(cur)
         return score
-    
-    @staticmethod
-    async def from_id(score_id: int, table: str, cur: aiomysql.Cursor) -> "Score":
-        """Fetches the score from database and initialises it to class."""
-        
-        await cur.execute(
-            f"SELECT * FROM {table} WHERE id = %s",
-            (score_id,)
-        )
-        
-        sql_row = await cur.fetchone()
-        return await Score.from_sql(sql_row, True, cur)
 
     @staticmethod
     async def from_sql(
