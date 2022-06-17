@@ -473,18 +473,6 @@ async def handle_submission(request: Request) -> Response:
             if await cur.fetchone():
                 score.status = -1  # duplicate
                 return PlainTextResponse("error: no")
-            
-            if score.passed:
-                await cur.execute(
-                    f"SELECT id FROM {table} WHERE userid = %s AND "
-                    f"beatmap_md5 = %s AND completed = 3 AND play_mode = {score.mode.as_mode_int()} LIMIT 1",
-                    (score.user_id, score.map.md5)
-                )
-                prev_db = await cur.fetchone()
-                
-                score.previous_score = await Score.from_id(
-                    prev_db[0], table, cur
-                ) if prev_db else None
 
             elapsed = args["st" if score.passed else "ft"]
             # if not elapsed or not elapsed.isdecimal():
@@ -572,15 +560,14 @@ async def handle_submission(request: Request) -> Response:
                 stats.total_hits += score.geki + score.katu
 
             if score.passed and score.map.has_leaderboard:
-                
                 if score.status == 3 and score.map.status == 2:
                     score_to_add = score.score
-                
+
                     if score.previous_score:
                         score_to_add -= score.previous_score.score
-                    
+
                     stats.ranked_score += score_to_add
-                
+
                 if score.combo > stats.max_combo:
                     stats.max_combo = score.combo
 
