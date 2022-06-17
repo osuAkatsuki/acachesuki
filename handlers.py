@@ -567,6 +567,8 @@ async def handle_submission(request: Request) -> Response:
             stats.total_hits += score.n300 + score.n100 + score.n50
 
             if score.mode.as_mode_int() in (1, 3):
+                # taiko uses geki & katu for hitting big notes with 2 keys
+                # mania uses geki & katu for rainbow 300 & 200
                 stats.total_hits += score.geki + score.katu
 
             if score.passed and score.map.has_leaderboard:
