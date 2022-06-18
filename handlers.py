@@ -554,19 +554,26 @@ async def handle_submission(request: Request) -> Response:
             stats.total_score += score.score
             stats.total_hits += score.n300 + score.n100 + score.n50
 
-            additive = score.score
-            if score.previous_score and score.status == 3:
-                additive -= score.previous_score.score
+            if score.mode.as_mode_int() in (1, 3):
+                # taiko uses geki & katu for hitting big notes with 2 keys
+                # mania uses geki & katu for rainbow 300 & 200
+                stats.total_hits += score.geki + score.katu
 
             if score.passed and score.map.has_leaderboard:
-                if score.map.status == 2:
-                    stats.ranked_score += additive
-
-                if score.status == 3 and score.pp:
-                    await stats.recalc(cur)
-
-                if score.combo > old_stats.max_combo:
+                if score.combo > stats.max_combo:
                     stats.max_combo = score.combo
+
+                if score.status == 3: # best score
+                    if score.pp:
+                        await stats.recalc(cur)
+
+                    # ranked score
+                    if score.map.status == 2: # ranked map
+                        stats.ranked_score += score.score
+
+                        # remove previous score (if any)
+                        if score.previous_score:
+                            stats.ranked_score -= score.previous_score.score
 
             await stats.save(cur)
 
