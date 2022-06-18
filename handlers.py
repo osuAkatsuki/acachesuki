@@ -1,21 +1,28 @@
-import time
-import copy
 import base64
-from urllib.parse import unquote, unquote_plus
+import copy
+import time
+from urllib.parse import unquote
+from urllib.parse import unquote_plus
+
 import aiohttp
 import aiomysql
-
+from aiohttp import ClientSession
 from starlette.requests import Request
-from starlette.responses import Response, PlainTextResponse
-from const import FetchResult, LeaderboardTypes, Mode, Status
+from starlette.responses import PlainTextResponse
+from starlette.responses import Response
+
+from const import FetchResult
+from const import LeaderboardTypes
+from const import Mode
+from const import Status
 from globs import cache
 from globs.conn import conns
+from helpers.user import restrict_user
 from logger import info
-from objects.beatmap import LWBeatmap, try_bmap
+from objects.beatmap import LWBeatmap
+from objects.beatmap import try_bmap
 from objects.leaderboards import Leaderboard
 from objects.score import Score
-from aiohttp import ClientSession
-from helpers.user import restrict_user
 
 
 def __format_score_old(score: tuple, place: int, get_clans: bool = True) -> str:
@@ -563,12 +570,12 @@ async def handle_submission(request: Request) -> Response:
                 if score.combo > stats.max_combo:
                     stats.max_combo = score.combo
 
-                if score.status == 3: # best score
+                if score.status == 3:  # best score
                     if score.pp:
                         await stats.recalc(cur)
 
                     # ranked score
-                    if score.map.status == 2: # ranked map
+                    if score.map.status == 2:  # ranked map
                         stats.ranked_score += score.score
 
                         # remove previous score (if any)

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3.9
-
-from config import conf
 import uvicorn
-from globs.cache import init_caches
-from globs.conn import conns
 from starlette.applications import Starlette
 from starlette.routing import Route
-from logger import debug, error, info, DEBUG
-from pubsubs import (
-    # handle_restricted_user,
-    pubsub_executor,
-    handle_status_update,
-    # name_change,
-)
-from handlers import handle_submission, handle_replays, handle_leaderboards
+
+from config import conf
+from globs.cache import init_caches
+from globs.conn import conns
+from handlers import handle_leaderboards
+from handlers import handle_replays
+from handlers import handle_submission
+from logger import DEBUG
+from logger import debug
+from logger import error
+from logger import info
+from pubsubs import handle_status_update
+from pubsubs import pubsub_executor
 
 # uvloop is a significantly faster loop.
 try:

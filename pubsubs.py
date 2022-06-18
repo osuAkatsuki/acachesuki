@@ -8,7 +8,8 @@ from aioredis import Channel
 from const import Status
 from globs.cache import beatmap
 from globs.conn import conns
-from logger import error, info
+from logger import error
+from logger import info
 
 REDIS_LOCK = asyncio.Lock()
 

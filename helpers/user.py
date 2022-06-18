@@ -1,8 +1,8 @@
-from globs.conn import conns
-from globs import cache
-from logger import formatted_date
-
 import time
+
+from globs import cache
+from globs.conn import conns
+from logger import formatted_date
 
 
 async def restrict_user(user_id: int, reason: str = "") -> None:

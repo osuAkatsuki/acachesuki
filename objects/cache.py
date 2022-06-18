@@ -1,13 +1,15 @@
 # Structures related to caching etc.
+import asyncio
 import time
-from typing import Optional, TypedDict, Union
-
-from const import Mode
-from objects.stats import Stats
+from typing import Optional
+from typing import TypedDict
+from typing import Union
 
 import aiomysql
 import bcrypt
-import asyncio
+
+from const import Mode
+from objects.stats import Stats
 
 CACHE_KEY = Union[int, str, tuple]
 

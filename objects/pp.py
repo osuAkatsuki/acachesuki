@@ -1,10 +1,12 @@
-from rosu_pp_py import Calculator as RCalculator, ScoreParams
-from peace_performance_python import Calculator, Beatmap
-from cmyui.osu.oppai_ng import OppaiWrapper
-from aiohttp import ClientSession
+import math
 from pathlib import Path
 
-import math
+from aiohttp import ClientSession
+from cmyui.osu.oppai_ng import OppaiWrapper
+from peace_performance_python import Beatmap
+from peace_performance_python import Calculator
+from rosu_pp_py import Calculator as RCalculator
+from rosu_pp_py import ScoreParams
 
 
 class RosuCalculator:  # wrapper around peace performance for ease of use

@@ -1,11 +1,13 @@
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 
 import aiomysql
 import aioredis
 
 from config import conf
-from logger import error, info
+from logger import error
+from logger import info
 
 
 # Big botch.

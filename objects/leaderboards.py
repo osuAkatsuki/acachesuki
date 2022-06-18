@@ -1,10 +1,16 @@
-from dataclasses import dataclass, field
-from typing import Optional, TypedDict
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Optional
+from typing import TypedDict
 
 import aiomysql
 
-from const import FetchResult, MAP_FILENAME, MapResult, Mode
-from objects.beatmap import LWBeatmap, try_bmap
+from const import FetchResult
+from const import MAP_FILENAME
+from const import MapResult
+from const import Mode
+from objects.beatmap import LWBeatmap
+from objects.beatmap import try_bmap
 from objects.score import Score
 
 BASE_QUERY = """

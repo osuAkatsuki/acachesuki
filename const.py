@@ -1,10 +1,12 @@
+import re
 from enum import IntEnum
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any
+from typing import Callable
+from typing import Optional
+from typing import TypeVar
 
 import pymysql
 from colorama import Fore
-
-import re
 
 T = TypeVar("T")
 

@@ -1,16 +1,23 @@
 import random
 import traceback
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Optional, Union, TYPE_CHECKING
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from typing import Optional
+from typing import TYPE_CHECKING
+from typing import Union
 
 import aiohttp
 import aiomysql  # For type checking
 
-from const import FetchResult, Status, Mode
-from globs import cache
-from logger import debug, error
 from config import conf
+from const import FetchResult
+from const import Mode
+from const import Status
+from globs import cache
+from logger import debug
+from logger import error
 
 if TYPE_CHECKING:
     from objects.leaderboards import Leaderboard

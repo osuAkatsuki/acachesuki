@@ -1,17 +1,14 @@
 # Global caches that should be accessable everywhere.
-from logger import info
-from objects.cache import (
-    BCryptCache,
-    ClanCache,
-    CountryCache,
-    FriendsCache,
-    LRUCache,
-    PrivilegeCache,
-    WhitelistCache,
-    StatsCache,
-)
-
 from .conn import conns
+from logger import info
+from objects.cache import BCryptCache
+from objects.cache import ClanCache
+from objects.cache import CountryCache
+from objects.cache import FriendsCache
+from objects.cache import LRUCache
+from objects.cache import PrivilegeCache
+from objects.cache import StatsCache
+from objects.cache import WhitelistCache
 
 # -- Basic caches --
 beatmap = LRUCache(cache_length=120, cache_limit=1000)

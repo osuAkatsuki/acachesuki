@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
-from globs.conn import conns
-from globs import cache
-from const import Mode
-
 import aiomysql
+
+from const import Mode
+from globs import cache
+from globs.conn import conns
 
 
 @dataclass
@@ -107,7 +107,7 @@ class Stats:
 
         total_pp = 0
         for idx_pp, pp in enumerate(scores_pp):
-            total_pp += round(round(pp[0]) * 0.95 ** idx_pp)
+            total_pp += round(round(pp[0]) * 0.95**idx_pp)
 
             # if idx_pp == 124:
             #   self._recalc_pp = pp[0]
@@ -125,8 +125,8 @@ class Stats:
         divider = 0.0
         try:
             for idx, acc in enumerate(scores_acc):
-                total_acc += acc[0] * int((0.95 ** idx) * 100)
-                divider += int((0.95 ** idx) * 100)
+                total_acc += acc[0] * int((0.95**idx) * 100)
+                divider += int((0.95**idx) * 100)
             self.accuracy = total_acc / divider
         except Exception as e:
             print(e)

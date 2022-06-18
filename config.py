@@ -1,6 +1,7 @@
 from typing import Union
 
-from logger import debug, info
+from logger import debug
+from logger import info
 
 try:
     from orjson import (
