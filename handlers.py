@@ -560,19 +560,20 @@ async def handle_submission(request: Request) -> Response:
                 stats.total_hits += score.geki + score.katu
 
             if score.passed and score.map.has_leaderboard:
-                if score.status == 3 and score.map.status == 2:
-                    score_to_add = score.score
-
-                    if score.previous_score:
-                        score_to_add -= score.previous_score.score
-
-                    stats.ranked_score += score_to_add
-
                 if score.combo > stats.max_combo:
                     stats.max_combo = score.combo
 
-                if score.status == 3 and score.pp:
-                    await stats.recalc(cur)
+                if score.status == 3: # best score
+                    if score.pp:
+                        await stats.recalc(cur)
+
+                    # ranked score
+                    if score.map.status == 2: # ranked map
+                        stats.ranked_score += score.score
+
+                        # remove previous score (if any)
+                        if score.previous_score:
+                            stats.ranked_score -= score.previous_score.score
 
             await stats.save(cur)
 
