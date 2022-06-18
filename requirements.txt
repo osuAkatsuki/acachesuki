@@ -1,10 +1,36 @@
-colorama == 0.4.4
-aiomysql == 0.0.21
-aioredis == 1.3.1
-aiohttp == 3.8.0
-bcrypt == 3.2.0
-uvloop == 0.16.0
-cmyui == 1.9.3
-py3rijndael == 0.3.3
-peace-performance-python == 1.1.2
-rosu-pp-py == 0.5.1
+aiohttp==3.8.0
+aiomysql==0.0.21
+aioredis==1.3.1
+aiosignal==1.2.0
+anyio==3.6.1
+asgiref==3.5.2
+async-timeout==4.0.2
+attrs==21.4.0
+bcrypt==3.2.0
+cffi==1.15.0
+charset-normalizer==2.0.12
+click==8.1.3
+cmyui==1.9.3
+colorama==0.4.4
+frozenlist==1.3.0
+h11==0.13.0
+hiredis==2.0.0
+idna==3.3
+multidict==6.0.2
+mysql-connector-python==8.0.29
+orjson==3.7.2
+OsuPyParser==1.0.7
+peace-performance-python==1.1.2
+protobuf==4.21.1
+py3rijndael==0.3.3
+pycparser==2.21
+PyMySQL==0.9.3
+python-multipart==0.0.5
+rosu-pp-py==0.5.1
+six==1.16.0
+sniffio==1.2.0
+starlette==0.20.3
+typing_extensions==4.2.0
+uvicorn==0.17.6
+uvloop==0.16.0
+yarl==1.7.2
