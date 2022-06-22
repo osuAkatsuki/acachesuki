@@ -441,10 +441,10 @@ async def handle_submission(request: Request) -> Response:
             elif score.mods & UNRANKED_MODS:
                 return PlainTextResponse("error: no")
 
-            if not headers.get("Token"):
-                await restrict_user(
-                    score.user_id, "Restricted for missing token header"
-                )
+            # if not headers.get("Token"):
+            #     await restrict_user(
+            #         score.user_id, "Restricted for missing token header"
+            #     )
 
             fs_data = args["fs"]
             try:
