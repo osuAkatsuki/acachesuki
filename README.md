@@ -9,3 +9,6 @@ a simple server to take pressure off our production servers in times of high loa
 ![Image Showing Requests](https://i.imgur.com/OpAWUVq.png)
 
 this is a small server, having only one handler and a smaller file structure.
+
+## archival notice
+we're now using a full rewrite of this service at https://github.com/osuAkatsuki/LESS
